@@ -16,11 +16,6 @@ type Transport = struct {
 	Headers Headers
 }
 
-type Transport2 = struct {
-	Data    []byte
-	Headers Headers
-}
-
 type NatsHandler struct {
 	Report              func(error)
 	Conn                *nats.Conn
