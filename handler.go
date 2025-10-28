@@ -9,6 +9,18 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
+type Headers = map[string][]string
+
+type Transport = struct {
+	Data    []byte
+	Headers Headers
+}
+
+type Transport2 = struct {
+	Data    []byte
+	Headers Headers
+}
+
 type NatsHandler struct {
 	Report              func(error)
 	Conn                *nats.Conn
@@ -68,7 +80,7 @@ func (n *NatsHandler) Stop() error {
 	return nil
 }
 
-func (n *NatsHandler) Handle(subject string, queue string, fn func(context.Context, []byte) ([]byte, error)) error {
+func (n *NatsHandler) Handle(subject string, queue string, fn func(context.Context, *Transport) (*Transport, error)) error {
 	n.mut.Lock()
 	defer n.mut.Unlock()
 	if n.Conn != nil {
@@ -76,14 +88,17 @@ func (n *NatsHandler) Handle(subject string, queue string, fn func(context.Conte
 	}
 	n.Subscriptions = append(n.Subscriptions, func(conn *nats.Conn) (*nats.Subscription, error) {
 		return conn.QueueSubscribe(subject, queue, func(msg *nats.Msg) {
-			out, err := fn(context.TODO(), msg.Data)
+			out, err := fn(context.TODO(), &Transport{msg.Data, msg.Header})
 			if err != nil {
 				if n.Report != nil {
 					n.Report(fmt.Errorf("subject: %s, queue: %s, error: %w", subject, queue, err))
 				}
 				return
 			}
-			if err := msg.Respond(out); err != nil {
+			reply := &nats.Msg{}
+			reply.Data = out.Data
+			reply.Header = out.Headers
+			if err := msg.RespondMsg(reply); err != nil {
 				if n.Report != nil {
 					n.Report(fmt.Errorf("subject: %s, queue: %s, error: %w", subject, queue, err))
 				}
